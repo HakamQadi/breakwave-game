@@ -24,11 +24,13 @@
     stateSecondary: document.getElementById("stateSecondaryBtn"),
     pauseBtn: document.getElementById("pauseBtn"),
     restartBtn: document.getElementById("restartBtn"),
-    soundBtn: document.getElementById("soundBtn")
+    soundBtn: document.getElementById("soundBtn"),
+    fullscreenBtn: document.getElementById("fullscreenBtn"),
+    card: document.querySelector(".game-card")
   };
 
   const WORLD = { w: 960, h: 600 };
-  const GRID = { cols: 36, rows: 20, left: 78, top: 58, width: 804, height: 312, gap: 1.35 };
+  const GRID = { cols: 36, rows: 20, left: 40, top: 42, width: 880, height: 400, gap: 1.35 };
   GRID.cellW = GRID.width / GRID.cols;
   GRID.cellH = GRID.height / GRID.rows;
 
@@ -64,6 +66,7 @@
     sound: safeStorage.get("pixelShatterSound", "on") !== "off",
     keys: { left: false, right: false },
     pointerActive: false,
+    pointerIsMouse: false,
     pointerX: WORLD.w / 2,
     transitionTimer: 0,
     flash: 0,
@@ -85,6 +88,8 @@
 
   const palette = {
     bg: "#090c16", grid: "#171c2b", grid2: "#1b2132", white: "#e9f0ff", mint: "#9bff6a",
+    // Filler cells are real blocks, so they must stay clearly brighter than the empty board.
+    fill1: "#2c3656", fill2: "#36426a", fillHi: "#4a5a90",
     cyan: "#5ee7ff", pink: "#ff72c6", yellow: "#ffd36b", purple: "#a88bff", red: "#ff6b7a"
   };
 
@@ -122,6 +127,9 @@
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
   function dist2(x1, y1, x2, y2) { const dx = x1 - x2, dy = y1 - y2; return dx * dx + dy * dy; }
 
+  // Paddle keeps the same share of the arena however wide the world gets.
+  function basePaddleW() { return settings.paddleW * WORLD.w / 960; }
+
   function resize() {
     const rect = stage.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -129,6 +137,25 @@
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
     canvas.style.width = `${rect.width}px`;
     canvas.style.height = `${rect.height}px`;
+
+    // Widen the world to the stage instead of letterboxing it, so the arena reaches both edges.
+    const prevW = WORLD.w;
+    WORLD.w = clamp(WORLD.h * (rect.width / Math.max(1, rect.height)), 760, 2200);
+    // Board stretches with the world, leaving side lanes wide enough for the ball to travel down.
+    GRID.width = WORLD.w - 120;
+    GRID.cellW = GRID.width / GRID.cols;
+    GRID.left = (WORLD.w - GRID.width) / 2;
+    for (const b of blocks) {
+      b.x = GRID.left + b.col * GRID.cellW + GRID.gap / 2;
+      b.w = GRID.cellW - GRID.gap;
+    }
+    paddle.w *= WORLD.w / prevW;
+    paddle.x = clamp(paddle.x, 12, WORLD.w - 12 - paddle.w);
+    paddle.targetX = clamp(paddle.targetX, 0, WORLD.w);
+    state.pointerX = clamp(state.pointerX, 0, WORLD.w);
+    for (const ball of balls) ball.x = clamp(ball.x, ball.r + 10, WORLD.w - ball.r - 10);
+    initStars();
+
     view.scale = Math.min(canvas.width / WORLD.w, canvas.height / WORLD.h);
     view.offsetX = (canvas.width - WORLD.w * view.scale) / 2;
     view.offsetY = (canvas.height - WORLD.h * view.scale) / 2;
@@ -151,12 +178,12 @@
       const hi = x < 15 && y < 8;
       return hi ? palette.white : (y > 13 ? "#ff4f91" : palette.pink);
     }
-    if ((x + y) % 17 === 0 || (x * 3 + y) % 29 === 0) return "#293047";
-    return (x + y) % 2 ? "#161b2a" : "#141927";
+    if ((x + y) % 17 === 0 || (x * 3 + y) % 29 === 0) return palette.fillHi;
+    return (x + y) % 2 ? palette.fill2 : palette.fill1;
   }
 
   function paintBug(x, y) {
-    const bg = (x + y) % 2 ? "#151a28" : "#181e2d";
+    const bg = (x + y) % 2 ? palette.fill2 : palette.fill1;
     const cx = 18, cy = 10;
     const body = Math.abs(x - cx) <= 5 && y >= 5 && y <= 15;
     const head = Math.abs(x - cx) <= 3 && y >= 3 && y <= 6;
@@ -175,7 +202,7 @@
     const cx = 18, cy = 10;
     const dx = (x - cx) / 11.5, dy = (y - cy) / 8;
     const inside = dx * dx + dy * dy <= 1;
-    if (!inside) return (x + y) % 2 ? "#151a28" : "#181e2d";
+    if (!inside) return (x + y) % 2 ? palette.fill2 : palette.fill1;
     if ((x >= 13 && x <= 15 && y >= 7 && y <= 9) || (x >= 21 && x <= 23 && y >= 7 && y <= 9)) return palette.white;
     if ((x === 14 || x === 22) && y === 8) return "#0a0d15";
     if (y >= 12 && y <= 14 && x >= 13 && x <= 23 && (y === 14 || x === 13 || x === 23)) return palette.pink;
@@ -237,7 +264,7 @@
 
   function startGame() {
     state.score = 0; state.lives = settings.startingLives; state.level = 0; state.combo = 0;
-    paddle.w = settings.paddleW; paddle.x = WORLD.w / 2 - paddle.w / 2;
+    paddle.w = basePaddleW(); paddle.x = WORLD.w / 2 - paddle.w / 2;
     buildLevel(state.level);
     state.mode = "playing";
     state.levelStartedAt = performance.now();
@@ -300,7 +327,7 @@
       showState("COMPLETE", "Perfect shatter", `All ${levels.length} artworks cleared. Final score: ${state.score.toLocaleString()}.`, "Play again");
       return;
     }
-    paddle.w = settings.paddleW;
+    paddle.w = basePaddleW();
     buildLevel(state.level);
     state.mode = "playing";
     state.levelStartedAt = performance.now();
@@ -321,10 +348,13 @@
     ui.lives.textContent = Array.from({ length: settings.startingLives }, (_, i) => i < state.lives ? "●" : "○").join(" ");
     ui.lives.setAttribute("aria-label", `${state.lives} ${state.lives === 1 ? "life" : "lives"}`);
     const pctExact = state.totalBlocks ? (state.blocksLeft / state.totalBlocks) * 100 : 100;
-    const pctLabel = pctExact >= 99.95 ? "100" : (pctExact >= 10 ? pctExact.toFixed(1) : pctExact.toFixed(0));
+    const pctLabel = pctExact >= 99.95 ? "100"
+      : pctExact >= 10 ? pctExact.toFixed(1)
+      : state.blocksLeft > 0 && pctExact < .5 ? "<1"
+      : pctExact.toFixed(0);
     ui.progress.textContent = `${pctLabel}%`;
-    ui.progressFill.style.width = `${pctExact}%`;
-    ui.progressTrack.setAttribute("aria-valuenow", String(Math.round(pctExact)));
+    ui.progressFill.style.width = `${state.blocksLeft > 0 ? Math.max(pctExact, .8) : 0}%`;
+    ui.progressTrack.setAttribute("aria-valuenow", String(state.blocksLeft > 0 ? Math.max(1, Math.round(pctExact)) : 0));
   }
 
   function spawnParticles(x, y, color, count = 8, power = 1) {
@@ -527,20 +557,25 @@
     glow.addColorStop(0, "rgba(94,231,255,.08)"); glow.addColorStop(1, "rgba(94,231,255,0)");
     ctx.fillStyle = glow; ctx.fillRect(0,0,WORLD.w,WORLD.h);
 
-    ctx.fillStyle = "rgba(255,255,255,.035)";
-    roundedRectPath(55, 35, 850, 360, 21); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 1; ctx.stroke();
-
-    ctx.fillStyle = "rgba(255,255,255,.52)"; ctx.font = "800 10px system-ui"; ctx.letterSpacing = "2px";
-    ctx.fillText(levels[state.level % levels.length].name, 76, 54);
   }
 
   function renderBlocks() {
+    // The last cells standing are usually background-toned pixels that read as empty board,
+    // so outline them once the level is nearly clear.
+    const spotlight = state.blocksLeft > 0 && state.blocksLeft <= 8;
+    const pulse = spotlight ? .35 + .5 * Math.abs(Math.sin(state.lastTime / 260)) : 0;
+    const tint = palette.yellow;
     for (const b of blocks) {
       if (!b.alive) continue;
       ctx.globalAlpha = b.alpha;
       ctx.fillStyle = b.color;
       ctx.fillRect(b.x, b.y, b.w, b.h);
+      if (spotlight) {
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = tint;
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(b.x + .6, b.y + .6, Math.max(0, b.w - 1.2), Math.max(0, b.h - 1.2));
+      }
       ctx.globalAlpha = .16;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(b.x + 1, b.y + 1, Math.max(0, b.w - 2), 1);
@@ -623,7 +658,7 @@
     let dt = (now - state.lastTime) / 1000;
     state.lastTime = now;
     dt = Math.min(.032, Math.max(0, dt));
-    update(dt); render();
+    update(dt); render(); syncCursor();
     requestAnimationFrame(frame);
   }
 
@@ -635,7 +670,14 @@
 
   function handlePointerMove(e) {
     state.pointerActive = true;
+    state.pointerIsMouse = e.pointerType === "mouse";
     state.pointerX = clamp(toWorldX(e.clientX), 0, WORLD.w);
+  }
+
+  // Get the cursor out of the way while the mouse is actually steering the paddle.
+  function syncCursor() {
+    const hide = state.mode === "playing" && state.pointerActive && state.pointerIsMouse;
+    stage.classList.toggle("cursor-hidden", hide);
   }
 
   stage.addEventListener("pointerdown", e => {
@@ -660,6 +702,7 @@
       else togglePause();
     }
     if (e.code === "KeyR" && !e.repeat) restartGame();
+    if (e.code === "KeyF" && !e.repeat) toggleFullscreen();
   }, { passive: false });
   window.addEventListener("keyup", e => {
     if (e.code === "ArrowLeft" || e.code === "KeyA") state.keys.left = false;
@@ -668,6 +711,18 @@
   window.addEventListener("blur", () => { if (state.mode === "playing") togglePause(true); });
   window.addEventListener("resize", resize);
 
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    else ui.card.requestFullscreen?.().catch(() => {});
+  }
+
+  document.addEventListener("fullscreenchange", () => {
+    const on = !!document.fullscreenElement;
+    ui.fullscreenBtn.setAttribute("aria-label", on ? "Exit full screen" : "Enter full screen");
+    requestAnimationFrame(resize);
+  });
+
+  ui.fullscreenBtn.addEventListener("click", toggleFullscreen);
   ui.startBtn.addEventListener("click", startGame);
   ui.pauseBtn.addEventListener("click", () => togglePause());
   ui.restartBtn.addEventListener("click", restartGame);
