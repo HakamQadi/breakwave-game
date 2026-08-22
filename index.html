@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="build" content="v1.0.3" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="build" content="v1.1.0-mobile" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#090b14" />
-  <meta name="description" content="Pixel Shatter — a satisfying browser arcade game. Keep the ball alive, destroy the pixel artwork, and trigger multiball." />
-  <title>Pixel Shatter</title>
+  <meta name="description" content="Breakwave — a satisfying browser arcade game built for desktop and mobile. Keep the ball alive, shatter every pixel, and trigger multiball." />
+  <title>Breakwave</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app-shell">
-    <section class="game-card" aria-label="Pixel Shatter game">
+    <section class="game-card" aria-label="Breakwave game">
       <header class="topbar">
         <div class="brand-wrap">
           <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
           <div>
             <div class="eyebrow">SATISFY MODE</div>
-            <h1>PIXEL SHATTER</h1>
+            <h1>BREAKWAVE</h1>
           </div>
         </div>
 
@@ -43,7 +43,7 @@
       </section>
 
       <div class="stage-wrap" id="stageWrap">
-        <canvas id="gameCanvas" aria-label="Game area. Move the paddle with mouse, touch, or arrow keys."></canvas>
+        <canvas id="gameCanvas" aria-label="Game area. Move the paddle with mouse, touch, arrow keys, or the mobile steering strip."></canvas>
 
         <div class="overlay is-visible" id="startOverlay">
           <div class="overlay-card">
@@ -51,7 +51,7 @@
             <h2>Break the picture.<br><em>Keep the chaos alive.</em></h2>
             <p>Move the paddle, keep the ball in play, and erase every pixel. Catch <b>×3</b> drops for multiball.</p>
             <button class="primary-btn" id="startBtn" type="button">Start game <span>→</span></button>
-            <div class="controls-hint"><span>Mouse / touch</span><i>or</i><span>← A &nbsp; D →</span></div>
+            <div class="controls-hint"><span class="desktop-hint">Mouse / arrows</span><span class="mobile-hint">Drag the steering bar</span><i>or</i><span>drag the arena</span></div>
           </div>
         </div>
 
@@ -63,6 +63,13 @@
             <button class="primary-btn" id="statePrimaryBtn" type="button">Resume <span>→</span></button>
             <button class="ghost-btn" id="stateSecondaryBtn" type="button">Restart run</button>
           </div>
+        </div>
+      </div>
+
+      <div class="touch-control" id="touchControl" aria-label="Mobile paddle control">
+        <div class="touch-control__label"><span>STEER</span><small>drag anywhere on the bar</small></div>
+        <div class="touch-control__track">
+          <div class="touch-control__thumb" id="touchThumb" aria-hidden="true"></div>
         </div>
       </div>
 
